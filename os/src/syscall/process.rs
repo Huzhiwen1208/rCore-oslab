@@ -3,6 +3,7 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     mm::write_time_val,
+    task::*,
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
@@ -53,10 +54,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     let us = get_time_us();
     let sec = us / 1000000;
     let usec = us % 1000000;
-    let tz: TimeVal = TimeVal {
-        sec,
-        usec,
-    };
+    let tz: TimeVal = TimeVal { sec, usec };
 
     let token = current_user_token();
     let sec_virt_addr = _ts as usize;
@@ -68,8 +66,25 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_task_info");
+    // status
+    let status = get_task_status();
+    unsafe {
+        (*_ti).status = status;
+    }
+
+    // syscall_times
+    let syscall_times = get_syscall_times();
+    unsafe {
+        (*_ti).syscall_times = syscall_times;
+    }
+
+    // time using
+    let time_using = get_time_using();
+    unsafe {
+        (*_ti).time = time_using;
+    }
+    0
 }
 
 // YOUR JOB: Implement mmap.

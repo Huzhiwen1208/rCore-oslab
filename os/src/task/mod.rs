@@ -15,6 +15,8 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
+use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -22,6 +24,7 @@ use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
+use crate::timer::get_time_ms;
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -77,9 +80,14 @@ impl TaskManager {
     /// But in ch4, we load apps statically, so the first task is a real app.
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
-        let next_task = &mut inner.tasks[0];
-        next_task.task_status = TaskStatus::Running;
-        let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
+        let task0 = &mut inner.tasks[0];
+        task0.task_status = TaskStatus::Running;
+        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+
+        if task0.load_time == 0 {
+            task0.load_time = get_time_ms();
+        }
+
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -149,15 +157,51 @@ impl TaskManager {
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
+
+            if inner.tasks[next].load_time == 0 {
+                inner.tasks[next].load_time = get_time_ms();
+            }
+
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
                 __switch(current_task_cx_ptr, next_task_cx_ptr);
             }
+
             // go back to user mode
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn get_current_task_status(&self) -> TaskStatus {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+        inner.tasks[curr].task_status
+    }
+
+    fn syscall_times_add(&self, syscall_id: usize) {
+        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+        inner.tasks[curr].syscall_times[syscall_id] += 1;
+    }
+
+    fn get_syscall_times_of_curr(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+        inner.tasks[curr].syscall_times
+    }
+
+    fn get_time_using_of_curr(&self) -> usize {
+        use crate::timer::*;
+        let curr_ms = get_time_ms();
+
+        // get executing count
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+        let load_time = inner.tasks[curr].load_time;
+
+        curr_ms - load_time
     }
 }
 
@@ -180,6 +224,23 @@ fn mark_current_suspended() {
 /// Change the status of current `Running` task into `Exited`.
 fn mark_current_exited() {
     TASK_MANAGER.mark_current_exited();
+}
+
+/// Get status of current task
+fn get_current_task_status() -> TaskStatus {
+    TASK_MANAGER.get_current_task_status()
+}
+
+fn syscall_times_add(syscall_id: usize) {
+    TASK_MANAGER.syscall_times_add(syscall_id);
+}
+
+fn get_syscall_times_of_curr() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_syscall_times_of_curr()
+}
+
+fn get_time_using_of_curr() -> usize {
+    TASK_MANAGER.get_time_using_of_curr()
 }
 
 /// Suspend the current 'Running' task and run the next task in task list.
@@ -212,4 +273,24 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// Get status of current task
+pub fn get_task_status() -> TaskStatus {
+    get_current_task_status()
+}
+
+/// system call times change
+pub fn system_call_times_change(syscall_id: usize) {
+    syscall_times_add(syscall_id);
+}
+
+/// get syscall times of current task
+pub fn get_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
+    get_syscall_times_of_curr()
+}
+
+/// get time using of current task
+pub fn get_time_using() -> usize {
+    get_time_using_of_curr()
 }
