@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use crate::syscall::TimeVal;
 
 bitflags! {
     /// page table entry flags
@@ -215,15 +216,18 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
 }
 
 /// Write_timeVal
-pub fn write_time_val(token: usize, vaddr: usize, val: usize) -> usize {
+pub fn write_time_val(token: usize, vaddr: usize, val: TimeVal) -> usize {
+
+    let len = core::mem::size_of::<TimeVal>();
+    let vec = translated_byte_buffer(token, vaddr as *const u8, len);
+    assert!(vec.len() == 1);
+
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(vaddr);
     let vpn = va.floor();
     let ppn = page_table.translate(vpn).unwrap().ppn();
     let offset = va.page_offset();
-    let sec_ptr = ppn.get_offset_mut::<usize>(offset);
-    info!("sec_ptr: {}", *sec_ptr);
+    let sec_ptr = ppn.get_offset_mut::<TimeVal>(offset);
     *sec_ptr = val;
-    info!("sec_ptr_after: {}", *sec_ptr);
     0
 }
