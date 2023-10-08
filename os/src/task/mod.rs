@@ -120,6 +120,12 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_user_token()
     }
 
+    /// Get the current 'Running' task's token.
+    fn get_current_task(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.current_task
+    }
+
     /// Get the current 'Running' task's trap contexts.
     fn get_current_trap_cx(&self) -> &'static mut TrapContext {
         let inner = self.inner.exclusive_access();
@@ -191,6 +197,11 @@ pub fn exit_current_and_run_next() {
 /// Get the current 'Running' task's token.
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
+}
+
+/// Get the current 'Running' task.
+pub fn current_task() -> usize {
+    TASK_MANAGER.get_current_task()
 }
 
 /// Get the current 'Running' task's trap contexts.
