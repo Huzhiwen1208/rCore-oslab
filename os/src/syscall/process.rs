@@ -8,7 +8,16 @@ use crate::{
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
+    }
+};
+use crate::{
+    config::MAX_SYSCALL_NUM,
+    mm::write_time_val,
+    task::{
+        change_program_brk, current_user_token, exit_current_and_run_next,
+        suspend_current_and_run_next, TaskStatus, current_task,
     },
+    timer::get_time_us,
 };
 
 #[repr(C)]
@@ -118,11 +127,28 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    trace!("kernel: sys_get_time");
+    let us = get_time_us();
+    let sec = us / 1000000;
+    let usec = us % 1000000;
+
+    // get _ts物理地址
+    let token = current_user_token();
+    
+    info!("[sys_get_time] current_user_token: {:#x}, current_task: {}", token, current_task());
+
+    let sec_virt_addr = _ts as usize;
+    let usec_virt_addr = sec_virt_addr + 1;
+
+    info!("[sys_get_time] sec_virt_addr: {:#x}", sec_virt_addr);
+
+    write_time_val(token, sec_virt_addr, sec);
+    info!("[sys_get_time] write_time_val[SEC] OK");
+
+    write_time_val(token, usec_virt_addr, usec);
+    info!("[sys_get_time] write_time_val[USEC] OK");
+
+    0
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases

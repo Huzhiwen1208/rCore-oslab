@@ -213,3 +213,17 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .unwrap()
         .get_mut()
 }
+
+/// Write_timeVal
+pub fn write_time_val(token: usize, vaddr: usize, val: usize) -> usize {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(vaddr);
+    let vpn = va.floor();
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+    let offset = va.page_offset();
+    let sec_ptr = ppn.get_offset_mut::<usize>(offset);
+    info!("sec_ptr: {}", *sec_ptr);
+    *sec_ptr = val;
+    info!("sec_ptr_after: {}", *sec_ptr);
+    0
+}

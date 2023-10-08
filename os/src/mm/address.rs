@@ -191,6 +191,11 @@ impl PhysPageNum {
         let pa: PhysAddr = (*self).into();
         pa.get_mut()
     }
+    /// Get the mutable reference of physical address[offset]
+    pub fn get_offset_mut<T>(&self, offset: usize) -> &'static mut T {
+        let pa: PhysAddr = ((self.0 as usize) << 12 | offset).into();   
+        pa.get_mut()
+    }
 }
 
 /// iterator for phy/virt page number
