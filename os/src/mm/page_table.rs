@@ -214,16 +214,3 @@ pub fn write_task_info(token: usize, vaddr: usize, val: TaskInfo) -> usize {
     *sec_ptr = val;
     0
 }
-
-/// System call: mmap
-pub fn mmap(token: usize, vpn: VirtPageNum, flags: PTEFlags) -> isize {
-    let mut page_table = PageTable::from_token(token);
-    let pte = page_table.translate(vpn);
-    if pte.is_none() {
-        let frame = frame_alloc().unwrap();
-        let ppn = frame.ppn;
-        page_table.map(vpn, ppn, flags);
-        return 0;
-    }
-    return -1;
-}

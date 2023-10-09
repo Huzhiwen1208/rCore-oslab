@@ -14,8 +14,9 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::loader::{get_app_data, get_num_app};
 use crate::config::MAX_SYSCALL_NUM;
+use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -199,8 +200,48 @@ impl TaskManager {
         let load_time = inner.tasks[curr].load_time;
 
         let curr_ms = get_time_ms() + 20;
-        warn!("currms, loadms: {}, {}", curr_ms, load_time);
         curr_ms - load_time
+    }
+
+    fn mmap(&self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
+        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+
+        for i in start_va.0..end_va.0 {
+            let pte = inner.tasks[curr]
+                .memory_set
+                .translate(VirtAddr::from(i).floor());
+            if let Some(pte) = pte {
+                if pte.is_valid() {
+                    return -1;
+                }
+            }
+        }
+
+        inner.tasks[curr]
+            .memory_set
+            .insert_framed_area(start_va, end_va, permission);
+        0
+    }
+
+    fn munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let curr = inner.current_task;
+
+        for i in start_va.0..end_va.0 {
+            let pte = inner.tasks[curr]
+                .memory_set
+                .translate(VirtAddr::from(i).floor());
+            if let Some(pte) = pte {
+                if !pte.is_valid() {
+                    return -1;
+                }
+            } else {
+                return -1;
+            }
+        }
+        inner.tasks[curr].memory_set.munmap(start_va.floor());
+        0
     }
 }
 
@@ -292,4 +333,14 @@ pub fn get_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
 /// get time using of current task
 pub fn get_time_using() -> usize {
     get_time_using_of_curr()
+}
+
+/// mmap
+pub fn mmap(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
+    TASK_MANAGER.mmap(start_va, end_va, permission)
+}
+
+/// munmap
+pub fn munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+    TASK_MANAGER.munmap(start_va, end_va)
 }

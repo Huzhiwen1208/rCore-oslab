@@ -2,7 +2,7 @@
 
 use crate::{
     config::MAX_SYSCALL_NUM,
-    mm::{write_time_val, write_task_info, VirtAddr, PTEFlags, mmap},
+    mm::{write_task_info, write_time_val, MapPermission, VirtAddr},
     task::*,
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next,
@@ -74,7 +74,7 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     // time using
     let time_using = get_time_using();
 
-    let ti = TaskInfo{
+    let ti = TaskInfo {
         status,
         syscall_times,
         time: time_using,
@@ -94,36 +94,45 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
         return -1;
     }
 
-    if _len % 4096 != 0 {
-        return -1;
-    }
-    
-    let vaddr = VirtAddr::from(_start);
-    if vaddr.page_offset() != 0 {
+    let start_addr = VirtAddr::from(_start);
+    if start_addr.page_offset() != 0 {
         return -1;
     }
 
-    let vpn = vaddr.floor();
-    let mut flags = match _port {
-        1 => PTEFlags::R,
-        2 => PTEFlags::W,
-        3 => PTEFlags::R | PTEFlags::W,
-        4 => PTEFlags::X,
-        5 => PTEFlags::R | PTEFlags::X,
-        6 => PTEFlags::W | PTEFlags::X,
-        7 => PTEFlags::R | PTEFlags::W | PTEFlags::X,
+    let end_addr = VirtAddr::from(_start + _len);
+    let mut flags: MapPermission = match _port {
+        1 => MapPermission::R,
+        2 => MapPermission::W,
+        3 => MapPermission::R | MapPermission::W,
+        4 => MapPermission::X,
+        5 => MapPermission::R | MapPermission::X,
+        6 => MapPermission::W | MapPermission::X,
+        7 => MapPermission::R | MapPermission::W | MapPermission::X,
         _ => panic!("should not reach here"),
     };
-    flags |= PTEFlags::U;
+    flags |= MapPermission::U;
 
-    let token = current_user_token();
-    return mmap(token, vpn, flags);
+    return mmap(start_addr, end_addr, flags);
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_munmap");
+    if _len == 0 {
+        return -1;
+    }
+
+    if _len % 4096 != 0 {
+        return -1;
+    }
+
+    let start_addr = VirtAddr::from(_start);
+    if start_addr.page_offset() != 0 {
+        return -1;
+    }
+
+    let end_addr = VirtAddr::from(_start + _len);
+    return munmap(start_addr, end_addr);
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

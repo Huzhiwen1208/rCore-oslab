@@ -229,6 +229,12 @@ impl MemorySet {
             asm!("sfence.vma");
         }
     }
+
+    /// 
+    pub fn munmap(&mut self, vpn: VirtPageNum) {
+        self.areas[0].unmap_one(&mut self.page_table, vpn)
+    }
+
     /// Translate a virtual page number to a page table entry
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
