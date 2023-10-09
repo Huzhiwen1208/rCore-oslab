@@ -30,7 +30,7 @@ mod process;
 
 use fs::*;
 use process::*;
-pub use process::TimeVal;
+pub use process::{TimeVal, TaskInfo};
 use crate::task::system_call_times_change;
 
 /// handle syscall exception with `syscall_id` and other arguments

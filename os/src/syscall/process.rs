@@ -2,7 +2,7 @@
 
 use crate::{
     config::MAX_SYSCALL_NUM,
-    mm::write_time_val,
+    mm::{write_time_val, write_task_info},
     task::*,
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next,
@@ -56,9 +56,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     let usec = us % 1000000;
     let tz: TimeVal = TimeVal { sec, usec };
 
-    let token = current_user_token();
-    let sec_virt_addr = _ts as usize;
-    write_time_val(token, sec_virt_addr, tz);
+    write_time_val(current_user_token(), _ts as usize, tz);
     0
 }
 
@@ -69,21 +67,20 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
     // status
     let status = get_task_status();
-    unsafe {
-        (*_ti).status = status;
-    }
 
     // syscall_times
     let syscall_times = get_syscall_times();
-    unsafe {
-        (*_ti).syscall_times = syscall_times;
-    }
 
     // time using
     let time_using = get_time_using();
-    unsafe {
-        (*_ti).time = time_using;
-    }
+
+    let ti = TaskInfo{
+        status,
+        syscall_times,
+        time: time_using,
+    };
+
+    write_task_info(current_user_token(), _ti as usize, ti);
     0
 }
 

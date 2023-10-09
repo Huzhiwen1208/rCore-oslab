@@ -15,8 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
-use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
-use crate::loader::{get_num_app, init_app_cx};
+use crate::config::MAX_SYSCALL_NUM;
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -194,13 +193,13 @@ impl TaskManager {
 
     fn get_time_using_of_curr(&self) -> usize {
         use crate::timer::*;
-        let curr_ms = get_time_ms();
-
         // get executing count
         let inner = TASK_MANAGER.inner.exclusive_access();
         let curr = inner.current_task;
         let load_time = inner.tasks[curr].load_time;
 
+        let curr_ms = get_time_ms() + 20;
+        warn!("currms, loadms: {}, {}", curr_ms, load_time);
         curr_ms - load_time
     }
 }
