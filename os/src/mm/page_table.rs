@@ -9,13 +9,21 @@ use crate::syscall::{TimeVal, TaskInfo};
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
+        /// V
         const V = 1 << 0;
+        /// R
         const R = 1 << 1;
+        /// W
         const W = 1 << 2;
+        /// X
         const X = 1 << 3;
+        /// U
         const U = 1 << 4;
+        /// G
         const G = 1 << 5;
+        /// A
         const A = 1 << 6;
+        /// D
         const D = 1 << 7;
     }
 }
@@ -205,4 +213,17 @@ pub fn write_task_info(token: usize, vaddr: usize, val: TaskInfo) -> usize {
     let sec_ptr = ppn.get_offset_mut::<TaskInfo>(offset);
     *sec_ptr = val;
     0
+}
+
+/// System call: mmap
+pub fn mmap(token: usize, vpn: VirtPageNum, flags: PTEFlags) -> isize {
+    let mut page_table = PageTable::from_token(token);
+    let pte = page_table.translate(vpn);
+    if pte.is_none() {
+        let frame = frame_alloc().unwrap();
+        let ppn = frame.ppn;
+        page_table.map(vpn, ppn, flags);
+        return 0;
+    }
+    return -1;
 }

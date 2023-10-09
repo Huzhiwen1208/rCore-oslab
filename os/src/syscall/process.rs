@@ -2,7 +2,7 @@
 
 use crate::{
     config::MAX_SYSCALL_NUM,
-    mm::{write_time_val, write_task_info},
+    mm::{write_time_val, write_task_info, VirtAddr, PTEFlags, mmap},
     task::*,
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next,
@@ -86,8 +86,38 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    trace!("kernel: sys_mmap");
+    if _len == 0 {
+        return -1;
+    }
+    if _port & !0x7 != 0 || _port & 0x7 == 0 {
+        return -1;
+    }
+
+    if _len % 4096 != 0 {
+        return -1;
+    }
+    
+    let vaddr = VirtAddr::from(_start);
+    if vaddr.page_offset() != 0 {
+        return -1;
+    }
+
+    let vpn = vaddr.floor();
+    let mut flags = match _port {
+        1 => PTEFlags::R,
+        2 => PTEFlags::W,
+        3 => PTEFlags::R | PTEFlags::W,
+        4 => PTEFlags::X,
+        5 => PTEFlags::R | PTEFlags::X,
+        6 => PTEFlags::W | PTEFlags::X,
+        7 => PTEFlags::R | PTEFlags::W | PTEFlags::X,
+        _ => panic!("should not reach here"),
+    };
+    flags |= PTEFlags::U;
+
+    let token = current_user_token();
+    return mmap(token, vpn, flags);
 }
 
 // YOUR JOB: Implement munmap.
