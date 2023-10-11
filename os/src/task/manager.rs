@@ -61,6 +61,29 @@ impl TaskManager {
 
         0
     }
+
+    /// munmap
+    pub fn munmap(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let task = current_task().unwrap();
+
+        // should use (*task)!!!! not task
+        let mut inner = (*task).inner_exclusive_access();
+
+        for vaddr in start_va.0..end_va.0 {
+            let pte = inner.memory_set.translate(VirtAddr::from(vaddr).floor());
+            if let Some(pte) = pte {
+                if !pte.is_valid() {
+                    error!("pte exists: Vaddr{}", vaddr);
+                    return -1;
+                }
+            }else {
+                return -1;
+            }
+            inner.memory_set.unmap(VirtAddr::from(vaddr));
+        }
+
+        0
+    }
 }
 
 lazy_static! {
@@ -84,4 +107,9 @@ pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
 /// mmap
 pub fn mmap(start_va: VirtAddr, end_va: VirtAddr, prot: MapPermission) -> isize {
     TASK_MANAGER.exclusive_access().mmap(start_va, end_va, prot)
+}
+
+/// munmap
+pub fn munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+    TASK_MANAGER.exclusive_access().munmap(start_va, end_va)
 }

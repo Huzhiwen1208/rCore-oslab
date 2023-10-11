@@ -10,7 +10,7 @@ use crate::{
     mm::{write_task_info, write_time_val},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next, mmap,
-        suspend_current_and_run_next, TaskStatus,
+        suspend_current_and_run_next, TaskStatus,munmap,
     },
     timer::get_time_ms,
 };
@@ -199,11 +199,18 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
 
 /// YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    if _start % 4096 != 0 {
+        return -1;
+    }
+
+    if _len <= 0 || _len % 4096 != 0{
+        return -1;
+    }
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start + _len);
+
+    munmap(start_va, end_va);
+    0
 }
 
 /// change data segment size

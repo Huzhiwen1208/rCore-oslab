@@ -48,6 +48,12 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+
+    /// unmap
+    pub fn unmap(&mut self, va: VirtAddr) {
+        self.areas[0].unmap_one(&mut self.page_table, va.floor());
+    }
+
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
