@@ -1,6 +1,7 @@
 //! Process management syscalls
 use alloc::sync::Arc;
 
+use crate::mm::{MapPermission, VirtAddr};
 use crate::timer::get_time_us;
 use crate::{
     config::MAX_SYSCALL_NUM,
@@ -8,7 +9,7 @@ use crate::{
     mm::{translated_refmut, translated_str},
     mm::{write_task_info, write_time_val},
     task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
+        add_task, current_task, current_user_token, exit_current_and_run_next, mmap,
         suspend_current_and_run_next, TaskStatus,
     },
     timer::get_time_ms,
@@ -167,11 +168,33 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 /// YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    if _start % 4096 != 0 {
+        return -1;
+    }
+
+    if _len <= 0 {
+        return -1;
+    }
+
+    if _port & !0x7 != 0 || _port & 0x7 == 0 {
+        return -1;
+    }
+
+    let permissions = match _port {
+        1 => MapPermission::R | MapPermission::U,
+        2 => MapPermission::W | MapPermission::U,
+        3 => MapPermission::R | MapPermission::W | MapPermission::U,
+        4 => MapPermission::X | MapPermission::U,
+        5 => MapPermission::R | MapPermission::X | MapPermission::U,
+        6 => MapPermission::X | MapPermission::W | MapPermission::U,
+        7 => MapPermission::R | MapPermission::W | MapPermission::X | MapPermission::U,
+        _ => panic!("invalid prot"),
+    };
+
+    let start_va = VirtAddr::from(_start);
+    let end_va = VirtAddr::from(_start + _len);
+
+    mmap(start_va, end_va, permissions)
 }
 
 /// YOUR JOB: Implement munmap.

@@ -30,7 +30,7 @@ pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-pub use manager::add_task;
+pub use manager::{add_task, mmap};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor,PROCESSOR,
@@ -94,7 +94,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     inner.memory_set.recycle_data_pages();
     drop(inner);
     // **** release current PCB
-    // drop task manually to maintain rc correctly
+    // drop task manually to maintain rc correctly'
+    drop(task);
     // we do not have to save task context
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
