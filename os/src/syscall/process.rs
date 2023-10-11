@@ -1,16 +1,18 @@
 //! Process management syscalls
 use alloc::sync::Arc;
 
+use crate::timer::get_time_us;
 use crate::{
     config::MAX_SYSCALL_NUM,
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
+    mm::{write_task_info, write_time_val},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
     },
+    timer::get_time_ms,
 };
-use crate::{mm::write_time_val, timer::get_time_us};
 
 /// time val
 #[repr(C)]
@@ -130,14 +132,9 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     let us = get_time_us();
     let sec = us / 1000000;
     let usec = us % 1000000;
-    let tz: TimeVal = TimeVal {
-        sec,
-        usec,
-    };
+    let tz: TimeVal = TimeVal { sec, usec };
 
-    let token = current_user_token();
-    let sec_virt_addr = _ts as usize;
-    write_time_val(token, sec_virt_addr, tz);
+    write_time_val(current_user_token(), _ts as usize, tz);
     0
 }
 
@@ -145,11 +142,27 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_task_info NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    trace!("kernel: sys_task_info");
+    let ti: TaskInfo;
+    {
+        let task = current_task().unwrap();
+
+        // status
+        let status = task.inner_exclusive_access().task_status;
+
+        // syscall_times
+        let syscall_times = task.inner_exclusive_access().syscall_times;
+
+        ti = TaskInfo {
+            status,
+            syscall_times,
+            time: get_time_ms() + 20 - task.inner_exclusive_access().load_time,
+        };
+    }
+
+    write_task_info(current_user_token(), _ti as usize, ti);
+
+    0
 }
 
 /// YOUR JOB: Implement mmap.
