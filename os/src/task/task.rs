@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE, BIGSTRIDE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -74,6 +74,15 @@ pub struct TaskControlBlockInner {
 
     /// load time: ms
     pub load_time: usize,
+
+    /// priority
+    pub priority: isize,
+
+    /// pass step
+    pub pass: isize,
+
+    /// stride
+    pub stride: isize,
 }
 
 impl TaskControlBlockInner {
@@ -126,6 +135,9 @@ impl TaskControlBlock {
                     program_brk: user_sp,
                     syscall_times: [0; MAX_SYSCALL_NUM],
                     load_time: 0,
+                    priority:16,
+                    pass: BIGSTRIDE/ 16,
+                    stride: 0,
                 })
             },
         };
@@ -201,25 +213,28 @@ impl TaskControlBlock {
                     program_brk: user_sp,
                     syscall_times: [0; MAX_SYSCALL_NUM],
                     load_time: 0,
+                    priority:16,
+                    pass: BIGSTRIDE/ 16,
+                    stride: 0,
                 })
             },
         });
 
-         // add child
-         parent_inner.children.push(task_control_block.clone());
-         // modify kernel_sp in trap_cx
-         // **** access child PCB exclusively
-         let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
-         *trap_cx = TrapContext::app_init_context(
+        // add child
+        parent_inner.children.push(task_control_block.clone());
+        // modify kernel_sp in trap_cx
+        // **** access child PCB exclusively
+        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
             entry,
             user_sp,
             KERNEL_SPACE.exclusive_access().token(),
             kernel_stack_top,
             trap_handler as usize,
         );
-         
-         // return
-         task_control_block
+
+        // return
+        task_control_block
     }
 
     /// parent process fork the child process
@@ -253,6 +268,9 @@ impl TaskControlBlock {
                     program_brk: parent_inner.program_brk,
                     syscall_times: [0; MAX_SYSCALL_NUM],
                     load_time: 0,
+                    priority:16,
+                    pass: BIGSTRIDE/ 16,
+                    stride: 0,
                 })
             },
         });
