@@ -1,7 +1,5 @@
 //! Constants in the kernel
 
-use core::isize::MAX;
-
 #[allow(unused)]
 
 /// user app's stack size
@@ -27,4 +25,4 @@ pub const CLOCK_FREQ: usize = 12500000;
 pub const MEMORY_END: usize = 0x88000000;
 
 /// STRIDE
-pub const BIGSTRIDE: isize = MAX / 2 + 10000;
+pub const BIGSTRIDE: isize = 10000;

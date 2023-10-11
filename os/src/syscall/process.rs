@@ -1,6 +1,7 @@
 //! Process management syscalls
 use alloc::sync::Arc;
 
+use crate::config::BIGSTRIDE;
 use crate::mm::{MapPermission, VirtAddr};
 use crate::timer::get_time_us;
 use crate::{
@@ -105,7 +106,7 @@ pub fn sys_spawn(path: *const u8) -> isize {
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
-    trace!(
+    debug!(
         "kernel::pid[{}] sys_waitpid [{}]",
         current_task().unwrap().pid.0,
         pid
@@ -139,6 +140,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
         found_pid as isize
     } else {
+        info!("not found zombie sub_process");
         -2
     }
     // ---- release current PCB automatically
@@ -249,5 +251,6 @@ pub fn sys_set_priority(prio: isize) -> isize {
     }
     let task = current_task().unwrap();
     (*task).inner_exclusive_access().priority = prio;
+    (*task).inner_exclusive_access().pass = BIGSTRIDE / prio;
     prio
 }

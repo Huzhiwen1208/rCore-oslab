@@ -34,6 +34,13 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
     }
+
+    /// stride changing
+    pub fn stride_changing(&self) {
+        let mut inner = self.inner_exclusive_access();
+        inner.stride += inner.pass;
+        error!("stride_changed: [stride: {}, pass: {}, prio: {}, pid: {}]", inner.stride, inner.pass, inner.priority, self.pid.0);
+    }
 }
 
 pub struct TaskControlBlockInner {

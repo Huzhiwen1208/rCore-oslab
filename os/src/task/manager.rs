@@ -1,11 +1,12 @@
 //!Implementation of [`TaskManager`]
-use super::TaskControlBlock;
+use super::{TaskControlBlock, TaskStatus};
 use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::task::current_task;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
+use log::*;
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -25,7 +26,19 @@ impl TaskManager {
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        // find min stride & pid
+        let mut min_stride = isize::MAX;
+        let mut min_idx = usize::MAX;
+
+        for (idx, task) in self.ready_queue.iter().enumerate() {
+            if task.inner_exclusive_access().task_status == TaskStatus::Ready
+                && min_stride > task.inner_exclusive_access().stride {
+                    min_stride = task.inner_exclusive_access().stride;
+                    min_idx = idx;
+                }
+        }
+
+        self.ready_queue.remove(min_idx)
     }
 
     /// mmap
@@ -76,7 +89,7 @@ impl TaskManager {
                     error!("pte exists: Vaddr{}", vaddr);
                     return -1;
                 }
-            }else {
+            } else {
                 return -1;
             }
             inner.memory_set.unmap(VirtAddr::from(vaddr));

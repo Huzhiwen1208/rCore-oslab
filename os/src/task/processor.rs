@@ -60,8 +60,11 @@ pub fn run_tasks() {
         if let Some(task) = fetch_task() {
             // load_time
             if task.inner_exclusive_access().load_time == 0 {
-                task.inner_exclusive_access().load_time = get_time_ms();
+                (*task).inner_exclusive_access().load_time = get_time_ms();
             }
+
+            // stride changing
+            task.stride_changing();
 
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively
