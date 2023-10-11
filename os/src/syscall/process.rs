@@ -9,8 +9,8 @@ use crate::{
     mm::{translated_refmut, translated_str},
     mm::{write_task_info, write_time_val},
     task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next, mmap,
-        suspend_current_and_run_next, TaskStatus,munmap,
+        add_task, current_task, current_user_token, exit_current_and_run_next, mmap, munmap,
+        suspend_current_and_run_next, TaskStatus,
     },
     timer::get_time_ms,
 };
@@ -81,6 +81,25 @@ pub fn sys_exec(path: *const u8) -> isize {
     } else {
         -1
     }
+}
+
+/// YOUR JOB: Implement spawn.
+/// HINT: fork + exec =/= spawn
+pub fn sys_spawn(path: *const u8) -> isize {
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        let task = current_task().unwrap();
+        let new_task = task.spawn(data);
+        let new_pid = new_task.pid.0;
+
+        let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+        trap_cx.x[10] = 0;
+
+        add_task(new_task);
+        return new_pid as isize;
+    }
+    return -1;
 }
 
 /// If there is not a child process whose pid is same as given, return -1.
@@ -203,7 +222,7 @@ pub fn sys_munmap(_start: usize, _len: usize) -> isize {
         return -1;
     }
 
-    if _len <= 0 || _len % 4096 != 0{
+    if _len <= 0 || _len % 4096 != 0 {
         return -1;
     }
     let start_va = VirtAddr::from(_start);
@@ -221,16 +240,6 @@ pub fn sys_sbrk(size: i32) -> isize {
     } else {
         -1
     }
-}
-
-/// YOUR JOB: Implement spawn.
-/// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
 }
 
 // YOUR JOB: Set task priority.
