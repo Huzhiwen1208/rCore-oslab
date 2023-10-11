@@ -8,17 +8,9 @@ use crate::{
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
-    }
-};
-use crate::{
-    config::MAX_SYSCALL_NUM,
-    mm::write_time_val,
-    task::{
-        change_program_brk, current_user_token, exit_current_and_run_next,
-        suspend_current_and_run_next, TaskStatus, current_task,
     },
-    timer::get_time_us,
 };
+use crate::{mm::write_time_val, timer::get_time_us};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -88,7 +80,11 @@ pub fn sys_exec(path: *const u8) -> isize {
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
-    trace!("kernel::pid[{}] sys_waitpid [{}]", current_task().unwrap().pid.0, pid);
+    trace!(
+        "kernel::pid[{}] sys_waitpid [{}]",
+        current_task().unwrap().pid.0,
+        pid
+    );
     let task = current_task().unwrap();
     // find a child process
 
@@ -134,9 +130,6 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 
     // get _ts物理地址
     let token = current_user_token();
-    
-    info!("[sys_get_time] current_user_token: {:#x}, current_task: {}", token, current_task());
-
     let sec_virt_addr = _ts as usize;
     let usec_virt_addr = sec_virt_addr + 1;
 
