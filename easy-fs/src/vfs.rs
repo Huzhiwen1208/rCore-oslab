@@ -5,6 +5,7 @@ use super::{
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use log::{error, info, warn};
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
 pub struct Inode {
@@ -61,8 +62,8 @@ impl Inode {
     /// Find inode under current inode by name
     pub fn find(&self, name: &str) -> Option<Arc<Inode>> {
         let fs = self.fs.lock();
-        self.read_disk_inode(|disk_inode| {
-            self.find_inode_id(name, disk_inode).map(|inode_id| {
+        self.read_disk_inode(|disk_inode| self.find_inode_id(name, disk_inode))
+            .map(|inode_id| {
                 let (block_id, block_offset) = fs.get_disk_inode_pos(inode_id);
                 Arc::new(Self::new(
                     block_id,
@@ -71,7 +72,20 @@ impl Inode {
                     self.block_device.clone(),
                 ))
             })
-        })
+    }
+
+    /// find_inode_id_by_name
+    pub fn find_inode_id_by_name(&self, name: &str) -> Option<u32> {
+        let _fs = self.fs.lock();
+        let id = self.read_disk_inode(|disk_inode| self.find_inode_id(name, disk_inode));
+        id
+    }
+
+    /// find inode id by self
+    pub fn find_inode_id_by_self(&self) -> u32 {
+        let fs = self.fs.lock();
+
+        fs.get_inode_id_revert(self.block_id as u32, self.block_offset)
     }
     /// Increase the size of a disk inode
     fn increase_size(
@@ -90,6 +104,74 @@ impl Inode {
         }
         disk_inode.increase_size(new_size, v, &self.block_device);
     }
+
+    /// write to dirent
+    pub fn write_dirent(&self, name: &str, inode_id: u32) -> isize {
+        let op = |root_inode: &DiskInode| {
+            // assert it is a directory
+            assert!(root_inode.is_dir());
+            // has the file been created?
+            self.find_inode_id(name, root_inode)
+        };
+
+        if self.read_disk_inode(op).is_some() {
+            error!("the name: {} exists in dirents", name);
+            return -1;
+        }
+
+        let mut fs = self.fs.lock();
+        self.modify_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            let new_size = (file_count + 1) * DIRENT_SZ;
+            // increase size
+            self.increase_size(new_size as u32, root_inode, &mut fs);
+            // write dirent
+            let dirent = DirEntry::new(name, inode_id);
+            root_inode.write_at(
+                file_count * DIRENT_SZ,
+                dirent.as_bytes(),
+                &self.block_device,
+            );
+        });
+
+        return 0;
+    }
+
+    /// remove dirent
+    pub fn remove_dirent(&self, name: &str) -> isize {
+        let op = |root_inode: &DiskInode| {
+            // assert it is a directory
+            assert!(root_inode.is_dir());
+            // has the file been created?
+            self.find_inode_id(name, root_inode)
+        };
+
+        if self.read_disk_inode(op).is_none() {
+            error!("the name: {} not exists in dirents", name);
+            return -1;
+        }
+
+        let _fs = self.fs.lock();
+        self.modify_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            for i in 0..file_count {
+                let mut dirent = DirEntry::empty();
+                root_inode.read_at(i * DIRENT_SZ, dirent.as_bytes_mut(), &self.block_device);
+
+                if dirent.name() == name {
+                    let empty_dirent = DirEntry::empty();
+                    warn!("remove! name: {}, inode_id: {}", dirent.name(), dirent.inode_id());
+                    root_inode.write_at(i * DIRENT_SZ, empty_dirent.as_bytes(), &self.block_device);
+                    break;
+                }
+            }
+        });
+
+        return 0;
+    }
+
     /// Create inode under current inode by name
     pub fn create(&self, name: &str) -> Option<Arc<Inode>> {
         let mut fs = self.fs.lock();
@@ -182,5 +264,38 @@ impl Inode {
             }
         });
         block_cache_sync_all();
+    }
+
+    /// get_file_type
+    pub fn get_file_type(&self) -> u8 {
+        self.read_disk_inode(|disk_node| {
+            if disk_node.is_file() {
+                return 1;
+            } else if disk_node.is_dir() {
+                return 2;
+            }
+            return 0;
+        })
+    }
+
+    /// get links from root inode by inode id
+    pub fn get_links(&self, inode_id: u32) -> usize {
+        let mut result: usize = 0;
+        self.read_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            // read dirent
+            for i in 0..file_count {
+                let mut dirent = DirEntry::empty();
+                assert_eq!(
+                    root_inode.read_at(i * DIRENT_SZ, dirent.as_bytes_mut(), &self.block_device,),
+                    DIRENT_SZ,
+                );
+                if inode_id == dirent.inode_id() {
+                    result += 1;
+                }
+            }
+        });
+        result
     }
 }

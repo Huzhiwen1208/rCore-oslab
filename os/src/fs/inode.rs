@@ -124,6 +124,32 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
+/// linkat
+pub fn linkat(old_path: &str, new_path: &str) -> isize {
+    let inode_id = ROOT_INODE.find_inode_id_by_name(old_path).unwrap();
+    ROOT_INODE.write_dirent(new_path, inode_id)
+}
+
+/// unlinkat
+pub fn unlinkat(path: &str) -> isize {
+    let inode_id = ROOT_INODE.find_inode_id_by_name(path).unwrap();
+    let links = ROOT_INODE.get_links(inode_id);
+    if links <= 0 {
+        error!("links < 1, name: {}", path);
+        return -1;
+    }
+    if links == 1 {
+        // clear
+        // 1. get inode
+        let inode = ROOT_INODE.find(path).unwrap();
+        (*inode).clear();
+        ROOT_INODE.remove_dirent(path);
+        return 0;
+    }
+    ROOT_INODE.remove_dirent(path);
+    0
+ }
+
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
@@ -154,5 +180,20 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+    fn get_inode_id(&self) -> u32 {
+        let inner = self.inner.exclusive_access();
+        let inode = &inner.inode;
+        return inode.find_inode_id_by_self();
+    }
+
+    fn get_file_type(&self) -> u8 {
+        let inner = self.inner.exclusive_access();
+        let inode = &inner.inode;
+        return inode.get_file_type();
+    }
+    fn get_links(&self) -> usize {
+        let inode_id = self.get_inode_id();
+        ROOT_INODE.get_links(inode_id)
     }
 }
