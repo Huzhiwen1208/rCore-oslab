@@ -9,6 +9,7 @@ use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
 use crate::sync::{Condvar, Mutex, Semaphore, UPSafeCell};
 use crate::trap::{trap_handler, TrapContext};
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -49,6 +50,17 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+
+    /// enable deadlock test?
+    pub enable_deadlock_test: bool,
+    /// allocation
+    pub allocation: BTreeMap<usize, Vec<usize>>,
+    /// need
+    pub need: BTreeMap<usize, Vec<usize>>,
+    /// available
+    pub available: Vec<usize>,
+    /// return value
+    pub return_value: isize,
 }
 
 impl ProcessControlBlockInner {
@@ -81,6 +93,54 @@ impl ProcessControlBlockInner {
     /// get a task with tid in this process
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+
+    ///
+    pub fn contains_key_allocation(&self, key: &usize) -> bool {
+        self.allocation.contains_key(key)
+    }
+
+    pub fn get_value_allocation(&self, key: &usize) -> &Vec<usize> {
+        self.allocation.get(key).unwrap()
+    }
+
+    pub fn set_value_allocation(&mut self, key: &usize, value: &Vec<usize>) {
+        if !self.contains_key_allocation(key) {
+            self.allocation.insert(key.clone(), value.clone());
+            return;
+        }
+
+        let m = self.allocation.get_mut(key).unwrap();
+        *m = value.clone();
+    }
+
+    pub fn is_allocated(&self) -> bool {
+        self.allocation.len() == self.tasks.len() - 1
+    }
+
+    pub fn contains_key_need(&self, key: &usize) -> bool {
+        self.need.contains_key(key)
+    }
+
+    pub fn get_value_need(&self, key: &usize) -> &Vec<usize> {
+        self.need.get(key).unwrap()
+    }
+
+    pub fn set_value_need(&mut self, key: &usize, value: &Vec<usize>) {
+        if !self.contains_key_need(key) {
+            self.need.insert(key.clone(), value.clone());
+            return 
+        }
+        let m = self.need.get_mut(key).unwrap();
+        *m = value.clone();
+    }
+
+    pub fn is_need_ok(&self) -> bool {
+        self.need.len() == self.tasks.len() - 1
+    }
+
+    pub fn deadlock_test(&self) -> isize {
+        -0xdead
     }
 }
 
@@ -119,6 +179,11 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable_deadlock_test: false,
+                    allocation: BTreeMap::new(),
+                    need: BTreeMap::new(),
+                    available: Vec::new(),
+                    return_value: 0,
                 })
             },
         });
@@ -245,6 +310,11 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable_deadlock_test: false,
+                    allocation: BTreeMap::new(),
+                    need: BTreeMap::new(),
+                    available: Vec::new(),
+                    return_value: 0,
                 })
             },
         });
