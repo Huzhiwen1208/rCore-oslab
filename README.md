@@ -2,7 +2,7 @@
 
 ### Code
 - [Soure Code of labs for 2023S](https://github.com/LearningOS/rCore-Tutorial-Code-2023S)
-### Documents
+### Documents 
 
 - Concise Manual: [rCore-Tutorial-Guide-2023S](https://LearningOS.github.io/rCore-Tutorial-Guide-2023S/)
 
