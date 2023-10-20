@@ -61,6 +61,9 @@ pub struct ProcessControlBlockInner {
     pub available: Vec<usize>,
     /// return value
     pub return_value: isize,
+
+    /// mutex possess tid
+    pub mutex_possess_tid: Vec<isize>,
 }
 
 impl ProcessControlBlockInner {
@@ -177,6 +180,7 @@ impl ProcessControlBlock {
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
                     mutex_list: Vec::new(),
+                    mutex_possess_tid: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
                     enable_deadlock_test: false,
@@ -308,6 +312,7 @@ impl ProcessControlBlock {
                     tasks: Vec::new(),
                     task_res_allocator: RecycleAllocator::new(),
                     mutex_list: Vec::new(),
+                    mutex_possess_tid: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
                     enable_deadlock_test: false,
