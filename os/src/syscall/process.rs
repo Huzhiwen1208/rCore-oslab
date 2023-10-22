@@ -8,7 +8,6 @@ use crate::{
     config::MAX_SYSCALL_NUM,
     loader::get_app_data_by_name,
     mm::{translated_refmut, translated_str},
-    mm::{write_task_info, write_time_val},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next, mmap, munmap,
         suspend_current_and_run_next, TaskStatus,
@@ -149,40 +148,37 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    let us = get_time_us();
-    let sec = us / 1000000;
-    let usec = us % 1000000;
-    let tz: TimeVal = TimeVal { sec, usec };
 
-    write_time_val(current_user_token(), _ts as usize, tz);
+    let ts = translated_refmut(current_user_token(), ts);
+    *ts = TimeVal {
+        sec: get_time_ms() / 1000,
+        usec: get_time_us(),
+    };
     0
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
-pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
-    let ti: TaskInfo;
-    {
-        let task = current_task().unwrap();
+    let ti = translated_refmut(current_user_token(), ti);
 
-        // status
-        let status = task.inner_exclusive_access().task_status;
+    let task = current_task().unwrap();
 
-        // syscall_times
-        let syscall_times = task.inner_exclusive_access().syscall_times;
+    // status
+    let status = task.inner_exclusive_access().task_status;
 
-        ti = TaskInfo {
-            status,
-            syscall_times,
-            time: get_time_ms() + 20 - task.inner_exclusive_access().load_time,
-        };
-    }
+    // syscall_times
+    let syscall_times = task.inner_exclusive_access().syscall_times;
 
-    write_task_info(current_user_token(), _ti as usize, ti);
+    *ti = TaskInfo {
+        status,
+        syscall_times,
+        time: get_time_ms() + 20 - task.inner_exclusive_access().load_time,
+    };
 
     0
 }
@@ -250,7 +246,8 @@ pub fn sys_set_priority(prio: isize) -> isize {
         return -1;
     }
     let task = current_task().unwrap();
-    (*task).inner_exclusive_access().priority = prio;
-    (*task).inner_exclusive_access().pass = BIGSTRIDE / prio;
+    let mut inner = task.inner_exclusive_access();
+    inner.priority = prio;
+    inner.pass = BIGSTRIDE / prio;
     prio
 }

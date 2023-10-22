@@ -45,8 +45,7 @@ impl TaskManager {
     pub fn mmap(&mut self, start_va: VirtAddr, end_va: VirtAddr, prot: MapPermission) -> isize {
         let task = current_task().unwrap();
 
-        // should use (*task)!!!! not task
-        let mut inner = (*task).inner_exclusive_access();
+        let mut inner = task.inner_exclusive_access();
 
         for vaddr in start_va.0..end_va.0 {
             let pte = inner.memory_set.translate(VirtAddr::from(vaddr).floor());
