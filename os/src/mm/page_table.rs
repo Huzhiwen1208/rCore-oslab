@@ -1,10 +1,10 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
-use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use crate::config::PAGE_SIZE_BITS;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-use crate::syscall::{TimeVal, TaskInfo};
 
 bitflags! {
     /// page table entry flags
@@ -181,36 +181,18 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     v
 }
 
-/// Write_timeVal
-pub fn write_time_val(token: usize, vaddr: usize, val: TimeVal) -> usize {
-
-    let len = core::mem::size_of::<TimeVal>();
-    let vec = translated_byte_buffer(token, vaddr as *const u8, len);
-    assert!(vec.len() == 1);
-
+/// tranlated ref mut T from vaddr
+pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
-    let va = VirtAddr::from(vaddr);
+
+    let va = VirtAddr::from(ptr as usize);
+
     let vpn = va.floor();
     let ppn = page_table.translate(vpn).unwrap().ppn();
+    let ppn_addr = ppn.0 << PAGE_SIZE_BITS;
     let offset = va.page_offset();
-    let sec_ptr = ppn.get_offset_mut::<TimeVal>(offset);
-    *sec_ptr = val;
-    0
-}
 
-/// Write task info
-pub fn write_task_info(token: usize, vaddr: usize, val: TaskInfo) -> usize {
+    let paddr = PhysAddr::from(ppn_addr + offset);
 
-    let len = core::mem::size_of::<TimeVal>();
-    let vec = translated_byte_buffer(token, vaddr as *const u8, len);
-    assert!(vec.len() == 1);
-
-    let page_table = PageTable::from_token(token);
-    let va = VirtAddr::from(vaddr);
-    let vpn = va.floor();
-    let ppn = page_table.translate(vpn).unwrap().ppn();
-    let offset = va.page_offset();
-    let sec_ptr = ppn.get_offset_mut::<TaskInfo>(offset);
-    *sec_ptr = val;
-    0
+    paddr.get_mut()
 }
